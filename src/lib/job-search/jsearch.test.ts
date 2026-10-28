@@ -15,6 +15,13 @@ beforeEach(() => vi.unstubAllGlobals());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("JSearch search", () => {
+  it("includes the country name for country-wide location preferences without adding a city radius", async () => {
+    const requests = stubFetch(() => json(jsearchV2LastPage));
+    await jsearch.search({ ...query, country: "ae", place: "", workMode: "onsite" }, ninja, null);
+    expect(requests[0].url.searchParams.get("query")).toBe("product designer in United Arab Emirates");
+    expect(requests[0].url.searchParams.get("country")).toBe("ae");
+    expect(requests[0].url.searchParams.has("radius")).toBe(false);
+  });
   it("asks OpenWeb Ninja's search-v2 with the key, place, country, radius and recency", async () => {
     const requests = stubFetch(() => json(jsearchV2Page));
     await jsearch.search(query, ninja, null);

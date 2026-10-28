@@ -48,6 +48,8 @@ export const searchQuerySchema = z.object({
     .regex(/^([a-z]{2})?$/),
   radiusKm: z.literal(RADII_KM),
   remoteOnly: z.boolean(),
+  /** Optional connector preference; source metadata may still need manual verification. */
+  workMode: z.enum(["onsite", "remote", "any"]).optional(),
   postedWithin: z.enum(POSTED_VALUES),
 });
 export type SearchQuery = z.output<typeof searchQuerySchema>;

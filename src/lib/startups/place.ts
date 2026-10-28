@@ -109,7 +109,7 @@ const AMBIGUOUS = new Set(["je", "ge", "jo", "td"]);
 /** Country names people write that Intl doesn't give. */
 const ALIASES: Record<string, string[]> = {
   us: ["usa", "united states of america"],
-  gb: ["great britain"],
+  gb: ["great britain", "uk", "britain", "england", "scotland", "wales", "northern ireland"],
   nl: ["holland", "the netherlands"],
   cz: ["czech republic"],
   ae: ["uae"],

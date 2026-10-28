@@ -141,7 +141,7 @@ export function createDossierServer(origin: string): McpServer {
         "Dossier is the user's own job search app: one profile, tailored resumes and cover letters, and every application tracked. " +
         "You are the AI engine; no AI provider needs to be set up inside Dossier. " +
         "For a CV or profile setup, call preview_profile_update with the facts you read, show the preview, and apply_profile_update only after the user approves. " +
-        "Check get_setup_status for readiness. For new opportunities call find_opportunities, then list_startups with the refresh ID until complete. " +
+        "Check get_setup_status for readiness and saved location preferences. When searching with those preferences, report which country indexes were searched and check remote eligibility in the full posting before presenting a job as suitable. For new opportunities call find_opportunities, then list_startups with the refresh ID until complete. " +
         "Missing job-source credentials don't block startups; tell the user which sources worked. Never request API keys in chat; use the Dossier settings link. " +
         "Use get_pipeline for progress, record_application_update for notes and interview dates, and update_application_documents to revise existing drafts. " +
         "Search jobs with search_jobs (in the profile's city and country unless the user says otherwise), " +

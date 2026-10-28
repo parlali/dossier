@@ -134,6 +134,21 @@ describe("Claude-driven workflow with the existing OAuth grant and no AI provide
     expect((await tool("list_startups", { new_only: false })).data.startups).toHaveLength(1);
   });
 
+  it("stores geographic preferences and uses them for discovery without changing the profile or OAuth grant", async () => {
+    const profileCountry = await prisma().profileField.findUnique({ where: { key: "country" } });
+    const result = await tool("set_job_search_settings", { location_preferences: { on_site_countries: ["gb", "ae"], remote_regions: ["Europe", "MENA"] } });
+    expect(result.isError).toBe(false);
+    expect((await tool("get_setup_status")).data.search_preferences.remote_regions).toEqual(["Europe", "MENA"]);
+    const found = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"] });
+    expect(found.data.searched_targets.map((target: { country: string }) => target.country)).toEqual(["gb", "ae", "gb", "ae"]);
+    const next = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"] });
+    expect(next.data.searched_targets.map((target: { country: string }) => target.country)).toEqual(["gb", "ae", "de", "sa"]);
+    const explicit = await tool("find_opportunities", { keywords: "designer", country: "fr", remote_only: true, sources: ["JSEARCH"] });
+    expect(explicit.data.searched_targets).toHaveLength(1);
+    expect(explicit.data.searched_targets[0].country).toBe("fr");
+    expect(await prisma().profileField.findUnique({ where: { key: "country" } })).toEqual(profileCountry);
+  });
+
   it("saves and dismisses job listings, and excludes saved and applied-for ones from new discoveries", async () => {
     const found = await tool("find_opportunities", { keywords: "designer", country: "de", sources: ["JSEARCH"] });
     const job = found.data.jobs[0];

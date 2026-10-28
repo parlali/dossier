@@ -23,7 +23,8 @@ export async function askSource(
   if (!query.country) return { ok: false, problem: "no-country", message: "Choose a country to search in." };
   try {
     const page = await searchPostings(from, credentialsFor(config, from), query, next, requestContext(from));
-    return { ok: true, source: from, ...page };
+    const postings = page.postings.filter((posting) => query.workMode === "onsite" ? posting.remote !== true : query.workMode === "remote" ? posting.remote !== false : true);
+    return { ok: true, source: from, ...page, postings };
   } catch (error) {
     if (error instanceof JobSearchError) return { ok: false, problem: error.problem, message: error.message };
     throw error;

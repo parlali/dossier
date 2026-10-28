@@ -7,6 +7,8 @@ This fork adds a Claude-driven workflow over Dossier's existing MCP connector. S
 - JSearch and Adzuna credentials are entered in Dossier Settings → Job search. Startup discovery needs no key. Never paste API keys into Claude.
 - Existing URLs, passwords and OAuth grants are retained. Start a new Claude chat to load the added tools; do not disconnect the connector.
 
+Saved location preferences can combine on-site countries and remote regions. Each discovery run searches every on-site country and one rotating index country per remote region, reporting the actual countries queried. Remote eligibility still needs checking in the full posting. Explicit location arguments override these defaults.
+
 The original documentation follows.
 
 <p align="center">
