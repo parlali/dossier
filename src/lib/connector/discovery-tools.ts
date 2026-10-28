@@ -91,11 +91,13 @@ export function registerDiscoveryTools(server: McpServer, origin: string): void 
         }
         return { found, reports };
       }
-      for (const target of targets) {
+      const targetResults = await Promise.all(targets.map(async (target) => {
+        const found: DiscoveredJob[] = [];
+        const reports: typeof outcomes = [];
         try {
-          if (!target.query.keywords.trim()) { reports.push({ source, target: target.label, found: 0, message: "Give keywords or add a headline to the profile." }); continue; }
+          if (!target.query.keywords.trim()) { reports.push({ source, target: target.label, found: 0, message: "Give keywords or add a headline to the profile." }); return { found, reports }; }
           const answer = await askSource(target.query, { source });
-          if (!answer.ok) { reports.push({ source, target: target.label, country: target.query.country, found: 0, message: answer.message }); continue; }
+          if (!answer.ok) { reports.push({ source, target: target.label, country: target.query.country, found: 0, message: answer.message }); return { found, reports }; }
           const search = await prisma.postingSearch.create({ data: { source, query: target.query, postings: answer.postings, found: answer.postings.length, next: answer.next } });
           found.push(...answer.postings.map((posting, index) => ({ search_id: search.id, number: index + 1, posting, search_target: target.label })));
           reports.push({ source, target: target.label, country: target.query.country, found: answer.postings.length, search_id: search.id });
@@ -103,14 +105,16 @@ export function registerDiscoveryTools(server: McpServer, origin: string): void 
           logServerError(`Claude discovery ${source}`, error);
           reports.push({ source, target: target.label, found: 0, message: "This source couldn't be reached. The other sources can still be used." });
         }
-      }
+        return { found, reports };
+      }));
+      for (const result of targetResults) { found.push(...result.found); reports.push(...result.reports); }
       return { found, reports };
     }));
     for (const result of results) { jobs.push(...result.found); outcomes.push(...result.reports); }
-    if (useSaved && input.location_page === undefined && outcomes.some((outcome) => outcome.search_id)) await advanceLocationPage(page);
     const states = await postingStates(jobs.map(({ posting }) => posting));
     const eligible = jobs.filter(({ posting }) => { const state = states.get(postingKey(posting)); return !state?.saved && !state?.dismissed && !state?.applicationId; });
     const selected = await unseenItems("jobs", eligible, ({ posting }) => [postingKey(posting), ...(linkKey(posting.url) ? [`url:${linkKey(posting.url)}`] : [])], input.limit, input.new_only);
+    if (useSaved && input.new_only && input.location_page === undefined && selected.remaining === 0 && outcomes.some((outcome) => outcome.search_id)) await advanceLocationPage(page);
     return text({ sources: outcomes, search_preferences: preferences, country_rotation_page: useSaved ? page : undefined, searched_targets: targets.map((target) => ({ label: target.label, country: target.query.country, mode: target.mode })), location_note: "Country is the job index searched, not proof of remote-work eligibility. Read the full posting before claiming a role accepts applicants from Europe/MENA. On-site searches exclude confirmed remote roles; check unclear or hybrid arrangements.", jobs: selected.items.map(({ posting, ...ref }) => ({ ...ref, source: posting.source, title: posting.title, company: posting.company, place: posting.place, remote: posting.remote, salary: posting.salary, posted: posting.postedAt, url: posting.url, snippet: posting.description.replace(/\s+/g, " ").slice(0, 700) })), remaining_in_results: selected.remaining, startup_refresh_id: startupRefreshId, settings_link: `${origin}/settings?section=jobs`, next: startupRefreshId ? "Call list_startups with this startup_refresh_id. Score and shortlist in Claude; no Dossier AI provider is needed." : "Read and score interesting postings in Claude. Use more_jobs with each search_id for the next provider page. With saved preferences, subsequent runs rotate remote-country indexes; explicit country/location arguments override the preferences." });
   });
 

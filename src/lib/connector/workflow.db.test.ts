@@ -139,8 +139,13 @@ describe("Claude-driven workflow with the existing OAuth grant and no AI provide
     const result = await tool("set_job_search_settings", { location_preferences: { on_site_countries: ["gb", "ae"], remote_regions: ["Europe", "MENA"] } });
     expect(result.isError).toBe(false);
     expect((await tool("get_setup_status")).data.search_preferences.remote_regions).toEqual(["Europe", "MENA"]);
-    const found = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"] });
+    const found = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"], limit: 1 });
     expect(found.data.searched_targets.map((target: { country: string }) => target.country)).toEqual(["gb", "ae", "gb", "ae"]);
+    expect(found.data.remaining_in_results).toBe(1);
+    const rest = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"] });
+    expect(rest.data.country_rotation_page).toBe(0);
+    expect(rest.data.jobs).toHaveLength(1);
+    expect(rest.data.remaining_in_results).toBe(0);
     const next = await tool("find_opportunities", { keywords: "designer", sources: ["JSEARCH"] });
     expect(next.data.searched_targets.map((target: { country: string }) => target.country)).toEqual(["gb", "ae", "de", "sa"]);
     const explicit = await tool("find_opportunities", { keywords: "designer", country: "fr", remote_only: true, sources: ["JSEARCH"] });

@@ -148,7 +148,7 @@ async function searchPage(
   context: RequestContext = {},
 ): Promise<SearchPage> {
   const url = searchUrl(query, host, next, context.baseUrl);
-  const answer = responseSchema.safeParse(await requestJson("JSEARCH", url, { headers: HOSTS[host].headers(key), signal: context.signal }));
+  const answer = responseSchema.safeParse(await requestJson("JSEARCH", url, { headers: HOSTS[host].headers(key), signal: context.signal, timeoutMs: 35_000 }));
   if (!answer.success) throw jobSearchError("changed", "JSEARCH", { detail: `${url.pathname}: unexpected answer` });
 
   const { jobs, cursor } = answer.data.data;

@@ -24,6 +24,14 @@ describe("requestJson", () => {
     await expect(requestJson("ADZUNA", url)).rejects.toMatchObject({ problem: "unavailable", detail: "ADZUNA: /api/search: HTTP 500" });
   });
 
+  it("allows slower sources their own timeout without changing the default", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    stubFetch(() => json({ ok: true }));
+    await requestJson("JSEARCH", url, { timeoutMs: 35_000 });
+    await requestJson("ADZUNA", url);
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([35_000, 10_000]);
+  });
+
   it("says the source changed when the answer isn't JSON", async () => {
     stubFetch(() => new Response("<html>Moved</html>", { status: 200 }));
     await expect(requestJson("ARBEITSAGENTUR", url)).rejects.toMatchObject({ problem: "changed", detail: "ARBEITSAGENTUR: /api/search: not JSON" });
