@@ -1,3 +1,14 @@
+This fork adds a Claude-driven workflow over Dossier's existing MCP connector. Source: [parlali/dossier](https://github.com/parlali/dossier).
+
+- Give Claude a CV, review its profile preview, then approve the merge. No AI provider is required inside Dossier.
+- Ask Claude to find new opportunities across configured job sources and YC/Hacker News startups. Missing provider keys do not block startup discovery.
+- Save or dismiss opportunities, write and revise application documents, and record pipeline updates, notes, deadlines and interviews.
+- New-only discovery remembers the last 10,000 returned identifiers. Use `new_only: false` to revisit results.
+- JSearch and Adzuna credentials are entered in Dossier Settings → Job search. Startup discovery needs no key. Never paste API keys into Claude.
+- Existing URLs, passwords and OAuth grants are retained. Start a new Claude chat to load the added tools; do not disconnect the connector.
+
+The original documentation follows.
+
 <p align="center">
   <img src="src/app/icon.svg" alt="" width="80" height="80">
 </p>

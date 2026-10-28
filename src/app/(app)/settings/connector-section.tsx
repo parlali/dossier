@@ -37,7 +37,7 @@ export function ConnectorSection({ initial, address }: { initial: { on: boolean 
     <>
       <SettingsSectionIntro title="Claude connector">
         Use Dossier from Claude: in chats on claude.ai, in the Desktop and mobile apps, and in Claude&apos;s command-line app. Claude can search for jobs, read your
-        profile and applications, and save the applications and fit scores it writes, on your own Claude plan. It never sends or deletes anything.
+        profile and applications, import your CV after approval, find jobs and startups, and save or revise applications on your own Claude plan. It never sends or deletes anything.
       </SettingsSectionIntro>
 
       <Card padding="none" className="px-7 py-4">

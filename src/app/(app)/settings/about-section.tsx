@@ -149,6 +149,7 @@ export function AboutSection({ facts, usagePing, updates }: { facts: AboutFacts;
           )}
         </p>
       </div>
+      <p className="text-meta text-muted">Claude workflow fork. <a href="https://github.com/parlali/dossier" target="_blank" rel="noopener noreferrer" className={LINK}>Source code and changes</a>.</p>
       <p className="text-meta text-muted">Checking asks GitHub for the latest release and sends nothing about you or this install, daily or when you press it.</p>
       <p className="text-meta text-muted">
         The usage ping only goes once you agree. It tells the Dossier project&apos;s maintainer, on the project&apos;s own server, how many installs are in use and how often. The ID is random and says nothing about you, and what&apos;s kept is deleted after a year. To have the rows already kept for this install removed sooner, note its ID, switch the ping off, and send the ID to{" "}

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { ApplicationStatus, DocumentKind } from "@/generated/prisma/enums";
@@ -18,14 +18,19 @@ import { withoutPrivateParts } from "@/lib/letter-frame";
 import { fetchPosting } from "@/lib/posting-fetch";
 import { saveScore } from "@/lib/posting-scores";
 import { loadSearch, runSearch, showMoreFor } from "@/lib/posting-searches";
-import { foundFromPosting, storePosting } from "@/lib/postings";
+import { dismissPosting, foundFromPosting, savePosting, storePosting } from "@/lib/postings";
 import { prisma } from "@/lib/prisma";
 import { loadProfile } from "@/lib/profile-data";
 import { statusInfo } from "@/lib/status";
 import { applyStatusChange } from "@/lib/status-changes";
 import { appVersion } from "@/lib/version";
+import { getStartup, startupPostingText } from "@/lib/startups/store";
 
 import { connectorDraftJob } from "./draft";
+import { registerDiscoveryTools } from "./discovery-tools";
+import { registerPipelineTools } from "./pipeline-tools";
+import { registerProfileTools } from "./profile-tools";
+import { failure, text } from "./responses";
 import { readPastedPosting } from "./handoff";
 import { saveWrittenApplication, WRITTEN_IN_CLAUDE, writtenDetailsSchema, writtenLetterSchema, writtenMatchSchema, writtenResumeSchema } from "./write";
 
@@ -35,9 +40,6 @@ import { saveWrittenApplication, WRITTEN_IN_CLAUDE, writtenDetailsSchema, writte
 // along. Like the AI features, they never send anything, and no tool
 // deletes or archives. Contact details, private notes and the letter's
 // sender and signature stay out of what Claude is given.
-
-const text = (value: unknown): CallToolResult => ({ content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }] });
-const failure = (message: string): CallToolResult => ({ content: [{ type: "text", text: message }], isError: true });
 
 const POSTED = POSTED_WITHIN.map((option) => option.value) as [PostedWithin, ...PostedWithin[]];
 
@@ -72,6 +74,7 @@ function documentText(units: unknown): string {
 
 /** Where a posting comes from, in a tool's input. */
 const postingSource = {
+  startup_id: z.string().max(100).optional().describe("A startup from list_startups or get_startup"),
   posting_id: z.string().max(100).optional().describe("A posting Dossier handed over, by its posting_id"),
   paste_id: z.string().max(100).optional().describe("A pasted posting Dossier handed over, by its paste_id"),
   search_id: z.string().max(100).optional().describe("A search from search_jobs"),
@@ -80,18 +83,23 @@ const postingSource = {
   posting_text: z.string().max(100_000).optional().describe("The posting's text, pasted"),
 };
 
-type PostingSource = { posting_id?: string; paste_id?: string; search_id?: string; number?: number; posting_url?: string; posting_text?: string };
-type ResolvedPosting = { text: string; url: string; postingId: string | null; title?: string; company?: string; place?: string };
+type PostingSource = { startup_id?: string; posting_id?: string; paste_id?: string; search_id?: string; number?: number; posting_url?: string; posting_text?: string };
+type ResolvedPosting = { text: string; url: string; postingId: string | null; startupId?: string; applicationId?: string | null; title?: string; company?: string; place?: string };
 
 /** The whole text of a posting from a search, one handed over, a link or pasted text, or what's wrong. */
 async function resolvePosting(source: PostingSource): Promise<ResolvedPosting | { error: string }> {
+  if (source.startup_id) {
+    const startup = await getStartup(source.startup_id);
+    if (!startup) return { error: "That startup no longer exists." };
+    return { text: startupPostingText(startup), url: startup.links.find((link) => link.label === "Hiring post")?.url || startup.website, postingId: null, startupId: startup.id, applicationId: startup.applicationId, company: startup.company, place: startup.location };
+  }
   if (source.posting_id) {
     const row = await prisma.posting.findUnique({ where: { id: source.posting_id } });
     if (!row) return { error: "That posting is no longer in Dossier. Open it again from Find jobs." };
     const found = foundFromPosting(row);
     const description = found.complete ? found.description : ((await fullText(found)) ?? found.description);
     if (!description.trim()) return { error: "That posting has no text to write from. Give its link as posting_url instead." };
-    return { text: postingText({ ...found, description }), url: found.url, postingId: row.id, title: found.title, company: found.company, place: found.place };
+    return { text: postingText({ ...found, description }), url: found.url, postingId: row.id, applicationId: row.applicationId, title: found.title, company: found.company, place: found.place };
   }
   if (source.paste_id) {
     const pasted = await readPastedPosting(source.paste_id);
@@ -131,6 +139,11 @@ export function createDossierServer(origin: string): McpServer {
     {
       instructions:
         "Dossier is the user's own job search app: one profile, tailored resumes and cover letters, and every application tracked. " +
+        "You are the AI engine; no AI provider needs to be set up inside Dossier. " +
+        "For a CV or profile setup, call preview_profile_update with the facts you read, show the preview, and apply_profile_update only after the user approves. " +
+        "Check get_setup_status for readiness. For new opportunities call find_opportunities, then list_startups with the refresh ID until complete. " +
+        "Missing job-source credentials don't block startups; tell the user which sources worked. Never request API keys in chat; use the Dossier settings link. " +
+        "Use get_pipeline for progress, record_application_update for notes and interview dates, and update_application_documents to revise existing drafts. " +
         "Search jobs with search_jobs (in the profile's city and country unless the user says otherwise), " +
         "and when the user wants to know which fit best, score them against the profile and save the scores with save_job_scores. " +
         "To draft an application, you write it yourself: call get_profile and get_posting, write a tailored resume and cover letter " +
@@ -139,6 +152,10 @@ export function createDossierServer(origin: string): McpServer {
         "Nothing is ever sent for the user: drafts wait in Dossier for them to review and download as PDFs.",
     },
   );
+
+  registerProfileTools(server, origin);
+  registerDiscoveryTools(server, origin);
+  registerPipelineTools(server, origin);
 
   server.registerTool(
     "get_profile",
@@ -356,6 +373,7 @@ export function createDossierServer(origin: string): McpServer {
       description:
         "The whole text of a job posting, from a search (search_id and number), one Dossier handed over (posting_id or paste_id) or a link (posting_url), to write an application from or score.",
       inputSchema: z.object({
+        startup_id: postingSource.startup_id,
         posting_id: postingSource.posting_id,
         paste_id: postingSource.paste_id,
         search_id: postingSource.search_id,
@@ -370,6 +388,22 @@ export function createDossierServer(origin: string): McpServer {
       return text({ url: posting.url || undefined, title: posting.title, company: posting.company, place: posting.place, text: posting.text });
     },
   );
+
+  server.registerTool("set_job_status", {
+    title: "Save or dismiss a job listing",
+    description: "Save a discovered job to Dossier's Saved list or dismiss it from future discovery. Give posting_id, or search_id and number from a search. Nothing is sent or applied for.",
+    inputSchema: z.object({ posting_id: z.string().max(100).optional(), search_id: z.string().max(100).optional(), number: z.number().int().min(1).optional(), status: z.enum(["SAVED", "DISMISSED"]) }),
+    annotations: { readOnlyHint: false, idempotentHint: true },
+  }, async ({ status, ...source }) => {
+    const resolved = await resolvePosting(source);
+    if ("error" in resolved) return failure(resolved.error);
+    const row = resolved.postingId ? await prisma.posting.findUnique({ where: { id: resolved.postingId } }) : null;
+    if (!row) return failure("Give a posting_id or search_id and number from Dossier's job results.");
+    const found = foundFromPosting(row);
+    if (status === "SAVED") await savePosting(found);
+    else await dismissPosting(found);
+    return text({ posting_id: row.id, status, link: linkTo(`/jobs?view=${status === "SAVED" ? "saved" : "dismissed"}`) });
+  });
 
   server.registerTool(
     "save_application",
@@ -392,6 +426,7 @@ export function createDossierServer(origin: string): McpServer {
     async ({ details, resume, cover_letter, match, note, ...source }) => {
       const posting = await resolvePosting(source);
       if ("error" in posting) return failure(posting.error);
+      if (posting.applicationId) return text({ application_id: posting.applicationId, already_exists: true, link: linkTo(`/applications/${posting.applicationId}`), next: "This opportunity already has an application. Use get_application and update_application_documents instead of creating a duplicate." });
       const saved = await saveWrittenApplication({
         posting: posting.text.slice(0, 100_000),
         postingUrl: posting.url.slice(0, 2000),
@@ -402,6 +437,9 @@ export function createDossierServer(origin: string): McpServer {
         match,
         note: note ?? "",
       });
+      if (posting.startupId) {
+        await prisma.startup.updateMany({ where: { id: posting.startupId, applicationId: null }, data: { applicationId: saved.applicationId } });
+      }
       return text({
         application_id: saved.applicationId,
         status: "Draft",
